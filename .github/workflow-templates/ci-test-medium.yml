@@ -1,0 +1,73 @@
+name: CI Test (Medium Runner)
+
+# This is a reusable workflow template for medium CI jobs
+# Runner: ubuntu-latest (2-core, 7GB RAM)
+# Timeout: 60 minutes
+# Use for: Full test suites, multi-version matrices, gem building
+
+on:
+  workflow_call:
+    inputs:
+      ruby-versions:
+        description: 'JSON array of Ruby versions to test'
+        required: false
+        type: string
+        default: '["2.6", "2.7", "3.0", "3.1"]'
+
+jobs:
+  medium-ci-job:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    strategy:
+      fail-fast: false
+      matrix:
+        ruby: ${{ fromJson(inputs.ruby-versions) }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Ruby ${{ matrix.ruby }}
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler-cache: true
+
+      - name: Track job start time
+        id: start-time
+        run: echo "start_time=$(date +%s)" >> $GITHUB_OUTPUT
+
+      - name: Run linter
+        run: bundle exec rubocop
+
+      - name: Run unit tests
+        run: bundle exec rake test
+
+      - name: Run integration tests
+        run: bundle exec rake integration
+
+      - name: Run specs
+        run: bundle exec rspec
+
+      - name: Track job end time and duration
+        if: always()
+        id: end-time
+        run: |
+          END_TIME=$(date +%s)
+          START_TIME=${{ steps.start-time.outputs.start_time }}
+          DURATION=$((END_TIME - START_TIME))
+          echo "Job Duration: ${DURATION} seconds"
+          echo "job_duration_seconds=${DURATION}" >> $GITHUB_OUTPUT
+
+      - name: Report execution time
+        if: always()
+        run: |
+          echo "### Job Execution Metrics (Ruby ${{ matrix.ruby }})" >> $GITHUB_STEP_SUMMARY
+          echo "- Runner: ubuntu-latest (Medium)" >> $GITHUB_STEP_SUMMARY
+          echo "- Timeout: 60 minutes" >> $GITHUB_STEP_SUMMARY
+          echo "- Actual Duration: ${{ steps.end-time.outputs.job_duration_seconds }} seconds" >> $GITHUB_STEP_SUMMARY
+          DURATION=${{ steps.end-time.outputs.job_duration_seconds }}
+          TIMEOUT_SECONDS=3600
+          UTILIZATION=$((DURATION * 100 / TIMEOUT_SECONDS))
+          echo "- Timeout Utilization: ${UTILIZATION}%" >> $GITHUB_STEP_SUMMARY

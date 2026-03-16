@@ -17,14 +17,40 @@ permissions:
 
 jobs:
   frogbot-scan:
+    # Runner sizing: Small runner (ubuntu-latest, 2-core, 7GB RAM)
+    # Rationale: Security scanning is I/O intensive but not CPU heavy
+    # See: .github/RUNNER_SIZING_GUIDELINES.md
     runs-on: ubuntu-latest
+    timeout-minutes: 15  # Appropriate timeout for security scan jobs
+
     strategy:
       matrix:
         branch: ["master"]
+
     steps:
+      - name: Track job start time
+        id: start-time
+        run: echo "start_time=$(date +%s)" >> $GITHUB_OUTPUT
+
       - uses: jfrog/frogbot@v2
         env:
           JF_URL: ${{ secrets.JF_URL }}
           JF_ACCESS_TOKEN: ${{ secrets.JF_ACCESS_TOKEN }}
           JF_GIT_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           JF_GIT_BASE_BRANCH: ${{ matrix.branch }}
+
+      - name: Track job end time and report execution metrics
+        if: always()
+        run: |
+          END_TIME=$(date +%s)
+          START_TIME=${{ steps.start-time.outputs.start_time }}
+          DURATION=$((END_TIME - START_TIME))
+          echo "### Job Execution Metrics" >> $GITHUB_STEP_SUMMARY
+          echo "- Job: frogbot-scan" >> $GITHUB_STEP_SUMMARY
+          echo "- Runner: ubuntu-latest (Small)" >> $GITHUB_STEP_SUMMARY
+          echo "- Timeout: 15 minutes" >> $GITHUB_STEP_SUMMARY
+          echo "- Actual Duration: ${DURATION} seconds" >> $GITHUB_STEP_SUMMARY
+          TIMEOUT_SECONDS=900
+          UTILIZATION=$((DURATION * 100 / TIMEOUT_SECONDS))
+          echo "- Timeout Utilization: ${UTILIZATION}%" >> $GITHUB_STEP_SUMMARY
+          echo "- Cost Tag: security-scan" >> $GITHUB_STEP_SUMMARY

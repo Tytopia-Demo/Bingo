@@ -1,0 +1,154 @@
+name: Continuous Integration
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # Quick linting job - uses small runner
+  lint:
+    name: Lint (RuboCop)
+    # Runner sizing: Small runner (ubuntu-latest, 2-core, 7GB RAM)
+    # Rationale: Linting is lightweight and completes quickly
+    # See: .github/RUNNER_SIZING_GUIDELINES.md
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Track job start time
+        id: start-time
+        run: echo "start_time=$(date +%s)" >> $GITHUB_OUTPUT
+
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.1'
+          bundler-cache: true
+
+      - name: Run RuboCop
+        run: bundle exec rubocop
+
+      - name: Track job end time and report metrics
+        if: always()
+        run: |
+          END_TIME=$(date +%s)
+          START_TIME=${{ steps.start-time.outputs.start_time }}
+          DURATION=$((END_TIME - START_TIME))
+          echo "### Job Execution Metrics - Lint" >> $GITHUB_STEP_SUMMARY
+          echo "- Runner: ubuntu-latest (Small)" >> $GITHUB_STEP_SUMMARY
+          echo "- Timeout: 10 minutes" >> $GITHUB_STEP_SUMMARY
+          echo "- Actual Duration: ${DURATION} seconds" >> $GITHUB_STEP_SUMMARY
+          echo "- Cost Tag: lint" >> $GITHUB_STEP_SUMMARY
+
+  # Test job - uses medium runner with matrix
+  test:
+    name: Test (Ruby ${{ matrix.ruby }})
+    # Runner sizing: Medium runner (ubuntu-latest, 2-core, 7GB RAM)
+    # Rationale: Running full test suite across multiple Ruby versions
+    # See: .github/RUNNER_SIZING_GUIDELINES.md
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    strategy:
+      fail-fast: false
+      matrix:
+        ruby: ['2.6', '2.7', '3.0', '3.1']
+
+    steps:
+      - name: Track job start time
+        id: start-time
+        run: echo "start_time=$(date +%s)" >> $GITHUB_OUTPUT
+
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Ruby ${{ matrix.ruby }}
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler-cache: true
+
+      - name: Run unit tests
+        run: bundle exec rake test
+
+      - name: Run RSpec tests
+        run: bundle exec rspec
+
+      - name: Track job end time and report metrics
+        if: always()
+        run: |
+          END_TIME=$(date +%s)
+          START_TIME=${{ steps.start-time.outputs.start_time }}
+          DURATION=$((END_TIME - START_TIME))
+          echo "### Job Execution Metrics - Test (Ruby ${{ matrix.ruby }})" >> $GITHUB_STEP_SUMMARY
+          echo "- Runner: ubuntu-latest (Medium)" >> $GITHUB_STEP_SUMMARY
+          echo "- Timeout: 45 minutes" >> $GITHUB_STEP_SUMMARY
+          echo "- Actual Duration: ${DURATION} seconds" >> $GITHUB_STEP_SUMMARY
+          TIMEOUT_SECONDS=2700
+          UTILIZATION=$((DURATION * 100 / TIMEOUT_SECONDS))
+          echo "- Timeout Utilization: ${UTILIZATION}%" >> $GITHUB_STEP_SUMMARY
+          echo "- Cost Tag: test-ruby-${{ matrix.ruby }}" >> $GITHUB_STEP_SUMMARY
+
+          # Optimization recommendations
+          if [ $UTILIZATION -lt 25 ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "💡 **Optimization**: Job used <25% of timeout. Consider reducing timeout or combining with other jobs." >> $GITHUB_STEP_SUMMARY
+          elif [ $UTILIZATION -gt 80 ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "⚠️ **Warning**: Job used >80% of timeout. Consider increasing timeout or optimizing tests." >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # Integration test job - runs only on master or when explicitly needed
+  integration:
+    name: Integration Tests
+    # Runner sizing: Medium runner (ubuntu-latest, 2-core, 7GB RAM)
+    # Rationale: Integration tests are more intensive but still moderate
+    # See: .github/RUNNER_SIZING_GUIDELINES.md
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    # Only run on master or workflow_dispatch to save resources
+    if: github.ref == 'refs/heads/master' || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - name: Track job start time
+        id: start-time
+        run: echo "start_time=$(date +%s)" >> $GITHUB_OUTPUT
+
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.1'
+          bundler-cache: true
+
+      - name: Run integration tests
+        run: bundle exec rake integration
+
+      - name: Track job end time and report metrics
+        if: always()
+        run: |
+          END_TIME=$(date +%s)
+          START_TIME=${{ steps.start-time.outputs.start_time }}
+          DURATION=$((END_TIME - START_TIME))
+          echo "### Job Execution Metrics - Integration" >> $GITHUB_STEP_SUMMARY
+          echo "- Runner: ubuntu-latest (Medium)" >> $GITHUB_STEP_SUMMARY
+          echo "- Timeout: 60 minutes" >> $GITHUB_STEP_SUMMARY
+          echo "- Actual Duration: ${DURATION} seconds" >> $GITHUB_STEP_SUMMARY
+          TIMEOUT_SECONDS=3600
+          UTILIZATION=$((DURATION * 100 / TIMEOUT_SECONDS))
+          echo "- Timeout Utilization: ${UTILIZATION}%" >> $GITHUB_STEP_SUMMARY
+          echo "- Cost Tag: integration" >> $GITHUB_STEP_SUMMARY

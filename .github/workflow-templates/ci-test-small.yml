@@ -1,0 +1,54 @@
+name: CI Test (Small Runner)
+
+# This is a reusable workflow template for small CI jobs
+# Runner: ubuntu-latest (2-core, 7GB RAM)
+# Timeout: 30 minutes
+# Use for: Linting, quick tests, security scans
+
+on:
+  workflow_call:
+    inputs:
+      ruby-version:
+        description: 'Ruby version to use'
+        required: false
+        type: string
+        default: '3.0'
+
+jobs:
+  small-ci-job:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ inputs.ruby-version }}
+          bundler-cache: true
+
+      - name: Track job start time
+        id: start-time
+        run: echo "start_time=$(date +%s)" >> $GITHUB_OUTPUT
+
+      - name: Run CI tasks
+        run: bundle exec rake ci
+
+      - name: Track job end time and duration
+        if: always()
+        run: |
+          END_TIME=$(date +%s)
+          START_TIME=${{ steps.start-time.outputs.start_time }}
+          DURATION=$((END_TIME - START_TIME))
+          echo "Job Duration: ${DURATION} seconds"
+          echo "job_duration_seconds=${DURATION}" >> $GITHUB_OUTPUT
+
+      - name: Report execution time
+        if: always()
+        run: |
+          echo "### Job Execution Metrics" >> $GITHUB_STEP_SUMMARY
+          echo "- Runner: ubuntu-latest (Small)" >> $GITHUB_STEP_SUMMARY
+          echo "- Timeout: 30 minutes" >> $GITHUB_STEP_SUMMARY
+          echo "- Actual Duration: ${{ steps.end-time.outputs.job_duration_seconds }} seconds" >> $GITHUB_STEP_SUMMARY

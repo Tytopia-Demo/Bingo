@@ -50,6 +50,18 @@ accept your pull requests.
 * Open a [pull request][4] that relates to *only* one subject with a clear title
   and description in grammatically correct, complete sentences.
 
+## GitHub Actions Workflows
+
+When contributing changes to GitHub Actions workflows:
+
+* Follow the [Runner Sizing Guidelines](RUNNER_SIZING_GUIDELINES.md) to select appropriate runner types
+* Always set explicit `timeout-minutes` for all jobs
+* Include job execution time tracking in new workflows
+* Add cost monitoring tags to help track optimization impact
+* Review the [Workflow Optimization Guide](WORKFLOW_OPTIMIZATION.md) for best practices
+* Consider using pre-configured [workflow templates](workflow-templates/) for common tasks
+* Consult the [Runner Matrix](RUNNER_MATRIX.md) for runner selection guidance
+
 ### Changelog entry format
 
 Here are a few examples:

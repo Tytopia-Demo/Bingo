@@ -1,0 +1,84 @@
+name: CI Test (Large Runner)
+
+# This is a reusable workflow template for large CI jobs
+# Runner: ubuntu-latest (Consider upgrading to larger runners if available)
+# Timeout: 120 minutes
+# Use for: Extensive integration tests, performance benchmarks, release processes
+
+on:
+  workflow_call:
+    inputs:
+      enable-performance-tests:
+        description: 'Enable performance testing'
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  large-ci-job:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Full history for comprehensive testing
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.1'
+          bundler-cache: true
+
+      - name: Track job start time
+        id: start-time
+        run: echo "start_time=$(date +%s)" >> $GITHUB_OUTPUT
+
+      - name: Install dependencies
+        run: bundle install --jobs 4 --retry 3
+
+      - name: Run comprehensive test suite
+        run: bundle exec rake ci
+
+      - name: Run performance tests
+        if: inputs.enable-performance-tests
+        run: |
+          echo "Running performance benchmarks..."
+          # Add performance test commands here
+
+      - name: Generate coverage report
+        run: |
+          echo "Generating test coverage report..."
+          # Add coverage reporting here
+
+      - name: Track job end time and duration
+        if: always()
+        id: end-time
+        run: |
+          END_TIME=$(date +%s)
+          START_TIME=${{ steps.start-time.outputs.start_time }}
+          DURATION=$((END_TIME - START_TIME))
+          echo "Job Duration: ${DURATION} seconds"
+          echo "job_duration_seconds=${DURATION}" >> $GITHUB_OUTPUT
+
+      - name: Report execution time
+        if: always()
+        run: |
+          echo "### Job Execution Metrics" >> $GITHUB_STEP_SUMMARY
+          echo "- Runner: ubuntu-latest (Large)" >> $GITHUB_STEP_SUMMARY
+          echo "- Timeout: 120 minutes" >> $GITHUB_STEP_SUMMARY
+          echo "- Actual Duration: ${{ steps.end-time.outputs.job_duration_seconds }} seconds" >> $GITHUB_STEP_SUMMARY
+          DURATION=${{ steps.end-time.outputs.job_duration_seconds }}
+          TIMEOUT_SECONDS=7200
+          UTILIZATION=$((DURATION * 100 / TIMEOUT_SECONDS))
+          echo "- Timeout Utilization: ${UTILIZATION}%" >> $GITHUB_STEP_SUMMARY
+
+          # Provide optimization recommendation
+          if [ $UTILIZATION -lt 25 ]; then
+            echo "⚠️ **Optimization Opportunity**: Job used <25% of timeout. Consider using a smaller runner." >> $GITHUB_STEP_SUMMARY
+          elif [ $UTILIZATION -gt 80 ]; then
+            echo "⚠️ **Warning**: Job used >80% of timeout. Consider increasing timeout or optimizing." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "✅ Job runtime is well-optimized for current runner size." >> $GITHUB_STEP_SUMMARY
+          fi
