@@ -180,6 +180,79 @@ access and refresh tokens. Two storage implementations are included:
 Custom storage implementations can also be used. See
 [token_store.rb](https://googleapis.dev/ruby/googleauth/latest/Google/Auth/TokenStore.html) for additional details.
 
+## Health and Readiness Endpoints
+
+This library provides Rack applications for health and readiness checks that can be mounted in web applications. These endpoints are useful for monitoring, orchestration (e.g., Kubernetes), and load balancing.
+
+### Health Check
+
+The health endpoint returns 200 OK when the service is running and core dependencies are available.
+
+```ruby
+# In Rails routes.rb
+match '/health', to: Google::Auth::HealthCheckApp, via: :get
+
+# In Rackup config.ru
+map '/health' do
+  run Google::Auth::HealthCheckApp
+end
+
+# In Sinatra
+get('/health') do
+  Google::Auth::HealthCheckApp.call(env)
+end
+```
+
+### Readiness Check
+
+The readiness endpoint returns 200 OK only when the service is fully initialized and ready to handle requests.
+
+```ruby
+# In Rails routes.rb
+match '/ready', to: Google::Auth::ReadinessCheckApp, via: :get
+
+# In Rackup config.ru
+map '/ready' do
+  run Google::Auth::ReadinessCheckApp
+end
+
+# In Sinatra
+get('/ready') do
+  Google::Auth::ReadinessCheckApp.call(env)
+end
+```
+
+### Custom Health Checks
+
+You can add custom checks for your application's specific dependencies:
+
+```ruby
+# Add a database connection check
+Google::Auth::HealthCheckApp.add_check("database") do
+  ActiveRecord::Base.connection.active?
+end
+
+# Add a Redis connection check
+Google::Auth::ReadinessCheckApp.add_check("redis") do
+  $redis.ping == "PONG"
+end
+```
+
+Both endpoints return JSON responses with the following format:
+
+```json
+{
+  "status": "healthy",
+  "timestamp": "2024-01-01T00:00:00Z",
+  "details": {
+    "ruby_version": "2.7.0",
+    "database": "ok"
+  }
+}
+```
+
+Health checks are subject to a timeout (default: 5 seconds) to prevent blocking.
+
 ## Supported Ruby Versions
 
 This library requires Ruby 2.4 or later.
