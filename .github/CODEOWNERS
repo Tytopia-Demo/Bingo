@@ -1,0 +1,8 @@
+# Default owners for everything in the repo
+* @googleapis/team-ruby
+
+# GitHub Actions workflows
+/.github/workflows/ @googleapis/team-ruby @googleapis/team-devtools
+
+# CI/CD configurations
+/.github/dependabot.yml @googleapis/team-ruby @googleapis/team-devtools

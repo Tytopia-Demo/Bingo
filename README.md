@@ -8,6 +8,9 @@
 </dl>
 
 [![Gem Version](https://badge.fury.io/rb/googleauth.svg)](http://badge.fury.io/rb/googleauth)
+[![CI](https://github.com/googleapis/google-auth-library-ruby/workflows/CI/badge.svg)](https://github.com/googleapis/google-auth-library-ruby/actions/workflows/ci.yml)
+[![Presubmit Checks](https://github.com/googleapis/google-auth-library-ruby/workflows/Presubmit%20Checks/badge.svg)](https://github.com/googleapis/google-auth-library-ruby/actions/workflows/presubmit.yml)
+[![Security](https://github.com/googleapis/google-auth-library-ruby/workflows/Security/badge.svg)](https://github.com/googleapis/google-auth-library-ruby/actions/workflows/security.yml)
 
 ## Description
 

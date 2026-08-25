@@ -1,0 +1,110 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release (e.g., v1.2.3)'
+        required: true
+        type: string
+
+jobs:
+  release:
+    name: Release Gem
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'
+          bundler-cache: true
+
+      - name: Configure Git
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+
+      - name: Determine version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            TAG="${{ github.event.inputs.tag }}"
+          else
+            TAG="${GITHUB_REF#refs/tags/}"
+          fi
+          VERSION="${TAG#v}"
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Releasing version: ${VERSION}"
+
+      - name: Update bundle
+        run: bundle update
+
+      - name: Build gem
+        run: bundle exec rake build
+
+      - name: Verify gem exists
+        run: |
+          if [ ! -f "pkg/googleauth-${{ steps.version.outputs.version }}.gem" ]; then
+            echo "Error: Gem file not found!"
+            exit 1
+          fi
+          ls -lh pkg/
+
+      - name: Publish to RubyGems
+        run: |
+          mkdir -p ~/.gem
+          cat << EOF > ~/.gem/credentials
+          ---
+          :rubygems_api_key: ${{ secrets.RUBYGEMS_API_TOKEN }}
+          EOF
+          chmod 0600 ~/.gem/credentials
+          gem push pkg/googleauth-${{ steps.version.outputs.version }}.gem
+        env:
+          RUBYGEMS_API_TOKEN: ${{ secrets.RUBYGEMS_API_TOKEN }}
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: Release ${{ steps.version.outputs.tag }}
+          draft: false
+          prerelease: false
+          files: |
+            pkg/googleauth-${{ steps.version.outputs.version }}.gem
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish documentation
+        run: bundle exec rake kokoro:publish_docs
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.DOCUPLOADER_SERVICE_ACCOUNT }}
+        continue-on-error: true
+
+  notify:
+    name: Notify Release Status
+    runs-on: ubuntu-latest
+    needs: release
+    if: always()
+    
+    steps:
+      - name: Report Success
+        if: needs.release.result == 'success'
+        run: echo "✅ Release completed successfully!"
+
+      - name: Report Failure
+        if: needs.release.result == 'failure'
+        run: |
+          echo "❌ Release failed!"
+          exit 1

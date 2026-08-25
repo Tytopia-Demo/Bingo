@@ -1,0 +1,108 @@
+name: Presubmit Checks
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  lint:
+    name: Lint and Style Check
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'
+          bundler-cache: true
+
+      - name: Install dependencies
+        run: bundle install
+
+      - name: Run RuboCop
+        run: bundle exec rubocop
+        continue-on-error: false
+
+  test-matrix:
+    name: Test on ${{ matrix.os }} with Ruby ${{ matrix.ruby }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        ruby: ['2.6', '2.7', '3.0', '3.1', '3.2']
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler-cache: true
+
+      - name: Display Ruby version
+        run: ruby --version
+
+      - name: Install dependencies
+        run: bundle install
+
+      - name: Run unit tests
+        run: bundle exec rake test
+
+      - name: Run RSpec tests
+        run: bundle exec rspec
+
+  integration-test:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    # Only run integration tests if credentials are available
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'
+          bundler-cache: true
+
+      - name: Install dependencies
+        run: bundle install
+
+      - name: Run integration tests
+        run: bundle exec rake integration
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}
+        continue-on-error: true
+
+  summary:
+    name: Presubmit Summary
+    runs-on: ubuntu-latest
+    needs: [lint, test-matrix, integration-test]
+    if: always()
+    
+    steps:
+      - name: Check results
+        run: |
+          echo "Lint: ${{ needs.lint.result }}"
+          echo "Test Matrix: ${{ needs.test-matrix.result }}"
+          echo "Integration Tests: ${{ needs.integration-test.result }}"
+          
+          if [ "${{ needs.lint.result }}" != "success" ]; then
+            echo "❌ Lint checks failed"
+            exit 1
+          fi
+          
+          if [ "${{ needs.test-matrix.result }}" != "success" ]; then
+            echo "❌ Test matrix failed"
+            exit 1
+          fi
+          
+          echo "✅ All presubmit checks passed!"

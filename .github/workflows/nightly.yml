@@ -1,0 +1,81 @@
+name: Nightly Build
+
+on:
+  schedule:
+    # Run every night at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+jobs:
+  nightly-test:
+    name: Nightly Test on ${{ matrix.os }} with Ruby ${{ matrix.ruby }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        ruby: ['2.5', '2.6', '2.7', '3.0', '3.1', '3.2', 'head']
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler-cache: true
+        continue-on-error: ${{ matrix.ruby == 'head' }}
+
+      - name: Display Ruby version
+        run: ruby --version
+
+      - name: Install dependencies
+        run: bundle install
+        continue-on-error: ${{ matrix.ruby == 'head' }}
+
+      - name: Run full CI suite
+        run: bundle exec rake ci
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}
+        continue-on-error: ${{ matrix.ruby == 'head' }}
+
+  report:
+    name: Report Nightly Results
+    runs-on: ubuntu-latest
+    needs: nightly-test
+    if: always()
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Generate report
+        run: |
+          echo "# Nightly Build Report" > report.md
+          echo "" >> report.md
+          echo "Date: $(date -u)" >> report.md
+          echo "Status: ${{ needs.nightly-test.result }}" >> report.md
+          echo "" >> report.md
+          
+          if [ "${{ needs.nightly-test.result }}" == "success" ]; then
+            echo "✅ All nightly tests passed!" >> report.md
+          else
+            echo "❌ Some nightly tests failed. Please review the workflow logs." >> report.md
+          fi
+          
+          cat report.md
+
+      - name: Create Issue on Failure
+        if: failure() && github.event_name == 'schedule'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Nightly build failed on ${new Date().toISOString().split('T')[0]}`,
+              body: `The nightly build has failed. Please check the [workflow run](${context.payload.repository.html_url}/actions/runs/${context.runId}) for details.`,
+              labels: ['nightly-failure', 'automated']
+            });
+            console.log(`Created issue #${issue.data.number}`);
